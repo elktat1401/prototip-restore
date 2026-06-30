@@ -1,6 +1,6 @@
 # GitSec — Rıza Saklama Prototipi (Consent Ledger)
 
-> **Frontend-only prototip.** KVKK md.7 / GDPR Art.7 uyumlu, **sürümlü** ve **geçmişe-dönük-kanıtlanabilir** rıza saklama akışlarını gösterir. **Backend yoktur:** tüm veri tarayıcıda `localStorage`'da tutulur, tüm hash'ler tarayıcıda **Web Crypto (SHA-256)** ile hesaplanır.
+> **Tıklanabilir prototip.** KVKK md.7 / GDPR Art.7 uyumlu, **sürümlü** ve **geçmişe-dönük-kanıtlanabilir** rıza saklama. Artık **hafif bir backend** içerir: **local Postgres** (gömülü PGlite — gerçek Postgres motoru; istenirse `DATABASE_URL` ile gerçek sunucu) + Next.js API route'ları. Hash zinciri **sunucuda** (otorite) hesaplanır, **istemcide** de aynı kodla doğrulanır (defense-in-depth).
 
 Bu repo, Frontend ve Backend ekiplerine geliştirilecek "rıza saklama" feature'ını somut bir tıklanabilir akışla anlatmak için hazırlandı. Backend teknik analizindeki katman menüsünden seçilen yöntemleri uygular:
 
@@ -46,6 +46,16 @@ Build: `npm run build && npm start`.
 
 > Not: Bu prototip ana projeden bağımsızdır, kendi `package.json`'ı vardır. Tasarım sistemi (shadcn/ui + Tailwind v4 token'ları) ana projeden birebir kopyalanmıştır; bileşenler taşındığında görünüm tutarlıdır.
 
+## Backend & Veritabanı
+
+Hafif bir backend dahildir (detay: [`docs/HANDOFF-BACKEND.md`](docs/HANDOFF-BACKEND.md)).
+
+- **DB:** Varsayılan **PGlite** — gerçek PostgreSQL motorunun Node içinde gömülü (WASM) hali. Ekstra servis yok; veri `.pgdata/` klasöründe kalıcı. İlk istekte şema kurulur + seed edilir.
+- **Gerçek Postgres istersen:** `DATABASE_URL=postgres://kullanıcı:şifre@host:5432/db` ver — aynı SQL `pg` ile çalışır (kod değişmez).
+- **API:** `app/api/consent/{ledger,events,state,requirements,verify,tamper,reset}` + `app/api/documents/[type]/{current,[version]}`.
+- **Hash zinciri** sunucuda hesaplanır (otorite); istemci ayrıca tarayıcıda doğrular — ikisi de `lib/consent/hash-chain.ts` canonical kuralını paylaşır.
+- `tamper`/`reset` yalnızca demo içindir; immutability (trigger/REVOKE) prototipte bilinçli olarak zorlanmaz.
+
 ---
 
 ## Demo senaryosu (önerilen sıra)
@@ -70,6 +80,7 @@ app/
   signup/  checkout/        Onay yakalama akışları
   login/   profile/         Re-consent bariyeri / opt-out
   ledger/                   Hash-chain defteri + temporal (denetçi görünümü)
+  api/                      Backend API route'ları (consent/*, documents/*)
 components/
   consent/                  Feature bileşenleri (form, makbuz, gate, explorer, inspector, ...)
   ui/                       shadcn/ui primitive'leri (ana projeden kopya)
@@ -80,7 +91,10 @@ lib/
     documents.ts           Katman 1.1 — sürümlü metin snapshot'ları
     store.ts               Katman 2.2 — append-only + temporal türetme + tamper
     hash-chain.ts          Katman 3.1 — canonical + SHA-256 zinciri + doğrulama
-    use-consent-store.ts   Reaktif store (useSyncExternalStore)
+    use-consent-store.ts   Reaktif store — API'ye bağlı (useSyncExternalStore)
+  server/
+    db.ts                  PGlite (varsayılan) / pg (DATABASE_URL) adaptörü
+    consent-repo.ts        Şema + seed + sorgular (Katman 1.1/2.2/3.1)
 docs/
   HANDOFF-BACKEND.md        Backend ekibi için aktarım
   HANDOFF-FRONTEND.md       Frontend ekibi için aktarım
@@ -92,6 +106,7 @@ docs/
 ## Bu bir prototiptir — sınırları
 
 - **Tek başına hash zinciri "tespit" sağlar, "önleme" değil.** Tam yetkili bir insider tüm zinciri yeniden hesaplayabilir. Üretimde önerilen yükseltme (Katalog Profil B): hash-chain **+ Vault asimetrik imza (3.3) + periyodik RFC 3161 / Kamu SM zaman damgası (3.4)**.
-- IP/User-Agent burada **mock**'tur; gerçekte sunucu `HttpContext`'ten gelir.
-- Veri yalnızca bu tarayıcıdadır; başka cihaz/oturumla paylaşılmaz.
+- IP/User-Agent: seed kayıtlarında mock; yeni olaylarda sunucu istek başlıklarından alır (lokalde `127.0.0.1`).
+- Veri local Postgres'te (PGlite, `.pgdata/`) tutulur; tek-kullanıcı/demo amaçlıdır.
+- Immutability (append-only trigger + REVOKE) prototipte zorlanmaz; `tamper`/`reset` demo endpoint'leri vardır.
 - Hukuki nihai yöntem seçimi (saklama süresi, zorunlu kanıt sınıfı) hukuk ekibiyle netleştirilmelidir — bkz. `docs/HANDOFF-BACKEND.md`.

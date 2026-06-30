@@ -26,3 +26,9 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# local Postgres (PGlite) data
+/.pgdata
+
+# yanlışlıkla bu klasörün içine klonlanmış GitHub deposu (ayrı repo; buraya ait değil)
+/gitsec-consent-ledger-prototype/

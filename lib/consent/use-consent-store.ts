@@ -1,55 +1,59 @@
 'use client';
 
 /**
- * Reaktif rıza defteri store'u (useSyncExternalStore tabanlı).
- * Tüm ekranlar aynı modül-seviyesi zincire bakar; bir ekrandaki ekleme/geri
- * çekme/kurcalama anında diğerlerine yansır.
+ * Reaktif rıza defteri store'u — artık BACKEND API'ye bağlıdır
+ * (localStorage değil). Tüm ekranlar aynı modül-seviyesi snapshot'a bakar;
+ * bir mutasyon sonrası defter yeniden çekilir ve tüm bileşenler güncellenir.
+ *
+ * Public arayüz değişmedi (records, ready, appendEvents, grant, withdraw,
+ * tamper, reset) → bileşenler aynı kaldı.
  */
 
 import { useSyncExternalStore } from 'react';
 
+import { type ConsentEventInput } from './store';
 import { type ConsentRecord } from './types';
-import {
-  appendEvents,
-  buildSeedRecords,
-  clearRecords,
-  type ConsentEventInput,
-  loadRecords,
-  saveRecords,
-  tamperField
-} from './store';
 
 const EMPTY: ConsentRecord[] = [];
 let snapshot: ConsentRecord[] = EMPTY;
 let initialized = false;
 let initPromise: Promise<void> | null = null;
+let initAttempts = 0;
 const listeners = new Set<() => void>();
 
 function emit(): void {
   for (const l of listeners) l();
 }
 
-function commit(records: ConsentRecord[]): void {
+function setRecords(records: ConsentRecord[]): void {
   snapshot = records;
-  saveRecords(records);
   emit();
+}
+
+async function fetchLedger(): Promise<ConsentRecord[]> {
+  const res = await fetch('/api/consent/ledger', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Defter alınamadı (${res.status})`);
+  const data = await res.json();
+  return (data.records ?? []) as ConsentRecord[];
 }
 
 function ensureInitialized(): Promise<void> {
   if (initialized) return Promise.resolve();
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    const existing = loadRecords();
-    if (existing.length > 0) {
-      snapshot = existing;
-    } else {
-      const seeded = await buildSeedRecords();
-      snapshot = seeded;
-      saveRecords(seeded);
-    }
+    const records = await fetchLedger();
+    snapshot = records;
     initialized = true;
     emit();
-  })();
+  })().catch(err => {
+    // Hata olursa initPromise'i bırak; geçici hatalarda kısa süre sonra otomatik tekrar dene
+    // (ör. sunucu/DB ilk açılışta hazır değilse UI kalıcı "Yükleniyor"da takılmasın).
+    initPromise = null;
+    console.error('[consent] ilk yükleme hatası:', err);
+    if (++initAttempts < 8 && typeof window !== 'undefined') {
+      setTimeout(() => void ensureInitialized(), 1500);
+    }
+  });
   return initPromise;
 }
 
@@ -73,9 +77,18 @@ function getServerSnapshot(): ConsentRecord[] {
 
 async function appendEventsAction(inputs: ConsentEventInput[]): Promise<ConsentRecord[]> {
   await ensureInitialized();
-  const next = await appendEvents(snapshot, inputs);
-  commit(next);
-  return next;
+  const res = await fetch('/api/consent/events', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ events: inputs })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `Olay eklenemedi (${res.status})`);
+  }
+  const fresh = await fetchLedger();
+  setRecords(fresh);
+  return fresh;
 }
 
 async function grant(input: Omit<ConsentEventInput, 'action'>): Promise<ConsentRecord[]> {
@@ -86,17 +99,18 @@ async function withdraw(input: Omit<ConsentEventInput, 'action'>): Promise<Conse
   return appendEventsAction([{ ...input, action: 'WITHDRAWN' }]);
 }
 
-function tamper(id: string, field: keyof ConsentRecord, value: string): void {
-  commit(tamperField(snapshot, id, field, value));
+async function tamper(id: string, field: keyof ConsentRecord, value: string): Promise<void> {
+  await fetch('/api/consent/tamper', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, field, value })
+  });
+  setRecords(await fetchLedger());
 }
 
 async function reset(): Promise<void> {
-  clearRecords();
-  initialized = false;
-  initPromise = null;
-  snapshot = EMPTY;
-  emit();
-  await ensureInitialized();
+  await fetch('/api/consent/reset', { method: 'POST' });
+  setRecords(await fetchLedger());
 }
 
 export interface ConsentStore {

@@ -7,7 +7,23 @@ Seçilen katmanlar: **1.1** (Postgres snapshot) + **2.2** (temporal/history) + *
 
 ---
 
-## 1. Veri tabanı şeması (Postgres)
+## 0. Bu repodaki çalışan referans backend
+
+Prototip artık **gerçek bir backend** içerir (hafif). Production için hedef hâlâ .NET/EF + Postgres'tir (aşağıdaki bölümler); bu referans, sözleşmeyi (şema, canonical, endpoint'ler, davranış) **çalışır halde** gösterir.
+
+- **DB:** Varsayılan **PGlite** (`@electric-sql/pglite`) — gerçek PostgreSQL motorunun Node içinde **gömülü (WASM)** çalışan hali. Ekstra servis/konteyner yok; veri `.pgdata`'da kalıcı. `DATABASE_URL` tanımlıysa **gerçek Postgres**'e (`pg`) bağlanır — **aynı SQL**. Bkz. [`../lib/server/db.ts`](../lib/server/db.ts).
+- **Repo:** [`../lib/server/consent-repo.ts`](../lib/server/consent-repo.ts) — şema, seed, ekleme, durum türetme, doğrulama. Hash zinciri mantığı `lib/consent/*`'ten **paylaşılır** → frontend ile birebir aynı canonical/hash (Web Crypto, Node 22'de de çalışır).
+- **API:** `app/api/**` route handler'ları (bkz. §3 tablosu — hepsi uygulanmış).
+- **Çalıştırma:** ekstra adım yok; `docker run ... npm install && npm run dev` (veya native `npm run dev`) yeterli. PGlite ilk API çağrısında şemayı kurar + seed eder. Gerçek Postgres için: `DATABASE_URL=postgres://… npm run dev`.
+
+> **Prototip ≠ production farkları (kasıtlı):**
+> - Tüm string alanlar **TEXT** olarak saklanır (üretimde §1'deki `timestamptz`/`inet`). Sebep: hash, canonical ISO/IP **string**'i üzerinden hesaplandığından TEXT, byte-bire-byte round-trip ile hash bütünlüğünü garanti eder. Üretimde `timestamptz`/`inet` kullanılabilir **ama** canonical her zaman sabit string forma (ISO-8601 UTC, IP string) serileştirilmelidir (§2).
+> - **Immutability zorlanmaz** (trigger/REVOKE yok) — çünkü tamper→cascade demosu için `UPDATE` gerekiyor. Üretimde §1'deki trigger + REVOKE **şarttır**.
+> - `POST /consent/tamper` ve `POST /consent/reset` yalnızca **demo** endpoint'leridir; production'a taşınmaz.
+
+---
+
+## 1. Veri tabanı şeması (Postgres — production hedefi)
 
 ### 1.1 — Belge sürüm snapshot'ı
 
