@@ -1,4 +1,4 @@
-# GitSec — Rıza Saklama Prototipi (Consent Ledger)
+# GitSec — Rıza Saklama Prototip (Consent Ledger)
 
 > **Tıklanabilir prototip.** KVKK md.7 / GDPR Art.7 uyumlu, **sürümlü** ve **geçmişe-dönük-kanıtlanabilir** rıza saklama. Artık **hafif bir backend** içerir: **local Postgres** (gömülü PGlite — gerçek Postgres motoru; istenirse `DATABASE_URL` ile gerçek sunucu) + Next.js API route'ları. Hash zinciri **sunucuda** (otorite) hesaplanır, **istemcide** de aynı kodla doğrulanır (defense-in-depth).
 
