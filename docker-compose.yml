@@ -1,0 +1,25 @@
+# Node kurmadan çalıştırmak için (makinede native node/pnpm yoksa).
+# Gereksinim: Docker Desktop açık olmalı.
+#
+#   docker compose up
+#
+# Sonra tarayıcıda:  http://localhost:3000
+#
+# Not: node_modules anonim volume'da tutulur (host'a yazılmaz, daha hızlı).
+# Bağımlılıklar ilk açılışta konteyner içinde kurulur.
+
+services:
+  web:
+    image: node:22
+    working_dir: /app
+    command: sh -c "npm install --no-fund --no-audit && npm run dev -- -H 0.0.0.0 -p 3000"
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NEXT_TELEMETRY_DISABLED=1
+      # Docker volume üzerinde dosya değişikliklerini yakalamak için (HMR):
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true

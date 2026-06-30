@@ -18,18 +18,31 @@ Bu repo, Frontend ve Backend ekiplerine geliştirilecek "rıza saklama" feature'
 
 ## Çalıştırma
 
-Gereksinim: Node.js 20+ ve `pnpm` (ana `git-security-dashboard-ui` projesiyle aynı toolchain).
+Prototipte **lockfile yoktur**; npm / pnpm / yarn hepsi çalışır.
+
+### Seçenek 1 — Docker (makinede Node kurulu değilse; önerilen)
+
+**Docker Desktop açık olmalı.** Repo klasöründe tek satır:
 
 ```bash
-pnpm install
-pnpm dev          # http://localhost:3000
+docker run --rm -it -p 3000:3000 -v "$PWD":/app -v /app/node_modules -w /app \
+  node:22 sh -c "npm install && npm run dev -- -H 0.0.0.0"
 ```
 
-Build:
+İlk açılış birkaç dakika sürer (node:22 imajı + bağımlılık kurulumu). Sonra: <http://localhost:3000> · Durdurmak için `Ctrl+C`.
+
+`docker compose` eklentin varsa alternatif olarak `docker compose up` da kullanılabilir (bkz. `docker-compose.yml`).
+
+### Seçenek 2 — Native Node
+
+Node.js 20+ kuruluysa (yoksa <https://nodejs.org> LTS .pkg ile kur, terminali yeniden aç):
 
 ```bash
-pnpm build && pnpm start
+npm install && npm run dev     # veya: pnpm install && pnpm dev
+# http://localhost:3000
 ```
+
+Build: `npm run build && npm start`.
 
 > Not: Bu prototip ana projeden bağımsızdır, kendi `package.json`'ı vardır. Tasarım sistemi (shadcn/ui + Tailwind v4 token'ları) ana projeden birebir kopyalanmıştır; bileşenler taşındığında görünüm tutarlıdır.
 
