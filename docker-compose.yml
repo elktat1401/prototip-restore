@@ -1,25 +1,55 @@
-# Node kurmadan çalıştırmak için (makinede native node/pnpm yoksa).
-# Gereksinim: Docker Desktop açık olmalı.
+# Tam yığın: app (web) + gerçek PostgreSQL (db). DBeaver/psql ile incelenebilir.
+# Gereksinim: Docker Desktop açık.
 #
 #   docker compose up
 #
-# Sonra tarayıcıda:  http://localhost:3000
+# Uygulama:  http://localhost:3000   (ilk istekte şema kurulur + seed edilir)
+# Postgres:  localhost:5432  ·  db=gitsec  user=postgres  pass=gitsec
+#            DBeaver: gitsec > Schemas > public > Tables > consent_records, consent_documents
 #
-# Not: node_modules anonim volume'da tutulur (host'a yazılmaz, daha hızlı).
-# Bağımlılıklar ilk açılışta konteyner içinde kurulur.
+# Not: Tablolar uygulama ilk API isteğini aldığında oluşur — `docker compose up`
+#      sonrası tarayıcıda http://localhost:3000/ledger aç, sonra DBeaver'da F5 (refresh).
+#
+# Yalnızca tıklanabilir demo (DB incelemesi gerekmez) için Postgres'siz tek-satır:
+#   docker run --rm -it -p 3000:3000 -v "$PWD":/app -v /app/node_modules -w /app \
+#     node:22 sh -c "npm install && npm run dev -- -H 0.0.0.0"
+#   (bu yol gömülü PGlite kullanır; DATABASE_URL set edilmez.)
 
 services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: gitsec
+      POSTGRES_DB: gitsec
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d gitsec']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   web:
     image: node:22
     working_dir: /app
     command: sh -c "npm install --no-fund --no-audit && npm run dev -- -H 0.0.0.0 -p 3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - NEXT_TELEMETRY_DISABLED=1
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      # Bu set edildiği için web, PGlite yerine yukarıdaki Postgres'e yazar:
+      - DATABASE_URL=postgres://postgres:gitsec@db:5432/gitsec
     ports:
       - '3000:3000'
     volumes:
       - .:/app
       - /app/node_modules
-    environment:
-      - NEXT_TELEMETRY_DISABLED=1
-      # Docker volume üzerinde dosya değişikliklerini yakalamak için (HMR):
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
+
+volumes:
+  pgdata:

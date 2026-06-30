@@ -31,7 +31,7 @@ docker run --rm -it -p 3000:3000 -v "$PWD":/app -v /app/node_modules -w /app \
 
 İlk açılış birkaç dakika sürer (node:22 imajı + bağımlılık kurulumu). Sonra: <http://localhost:3000> · Durdurmak için `Ctrl+C`.
 
-`docker compose` eklentin varsa alternatif olarak `docker compose up` da kullanılabilir (bkz. `docker-compose.yml`).
+**Gerçek Postgres + DB incelemesi istiyorsan** `docker compose up` kullan: app + PostgreSQL'i birlikte ayağa kaldırır (DB `localhost:5432`'de, DBeaver/psql ile incelenebilir). Bkz. `docker-compose.yml` ve aşağıdaki "Backend & Veritabanı".
 
 ### Seçenek 2 — Native Node
 
@@ -51,7 +51,7 @@ Build: `npm run build && npm start`.
 Hafif bir backend dahildir (detay: [`docs/HANDOFF-BACKEND.md`](docs/HANDOFF-BACKEND.md)).
 
 - **DB:** Varsayılan **PGlite** — gerçek PostgreSQL motorunun Node içinde gömülü (WASM) hali. Ekstra servis yok; veri `.pgdata/` klasöründe kalıcı. İlk istekte şema kurulur + seed edilir.
-- **Gerçek Postgres istersen:** `DATABASE_URL=postgres://kullanıcı:şifre@host:5432/db` ver — aynı SQL `pg` ile çalışır (kod değişmez).
+- **Gerçek Postgres istersen:** `DATABASE_URL=postgres://kullanıcı:şifre@host:5432/db` ver — aynı SQL `pg` ile çalışır (kod değişmez). En kolayı: **`docker compose up`** (app + Postgres). DBeaver/psql ile bağlan: `localhost:5432`, db `gitsec`, user `postgres`, pass `gitsec`. Tablolar (`consent_records`, `consent_documents`) **public** şemasında, ve **ilk API isteğinden sonra** oluşur — `http://localhost:3000/ledger` açıp DBeaver'da yenile (F5).
 - **API:** `app/api/consent/{ledger,events,state,requirements,verify,tamper,reset}` + `app/api/documents/[type]/{current,[version]}`.
 - **Hash zinciri** sunucuda hesaplanır (otorite); istemci ayrıca tarayıcıda doğrular — ikisi de `lib/consent/hash-chain.ts` canonical kuralını paylaşır.
 - `tamper`/`reset` yalnızca demo içindir; immutability (trigger/REVOKE) prototipte bilinçli olarak zorlanmaz.
