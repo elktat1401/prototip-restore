@@ -1,0 +1,1 @@
+araştırma geliştirme study entegrasyon
